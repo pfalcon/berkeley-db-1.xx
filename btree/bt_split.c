@@ -97,6 +97,7 @@ __bt_split(t, sp, key, data, flags, ilen, argskip)
 	u_int32_t n, nbytes, nksize = 0;
 	int parentsplit;
 	char *dest;
+	pgno_t pg_tmp;
 
 	/*
 	 * Split the page into two pages, l and r.  The split routines return
@@ -245,8 +246,10 @@ __bt_split(t, sp, key, data, flags, ilen, argskip)
 			WR_BINTERNAL(dest, nksize ? nksize : bl->ksize,
 			    rchild->pgno, bl->flags & P_BIGKEY);
 			memmove(dest, bl->bytes, nksize ? nksize : bl->ksize);
+			/* Avoid alignment violation */
+			memcpy(&pg_tmp, bl->bytes, sizeof(pgno_t));
 			if (bl->flags & P_BIGKEY &&
-			    bt_preserve(t, *(pgno_t *)bl->bytes) == RET_ERROR)
+			    bt_preserve(t, pg_tmp) == RET_ERROR)
 				goto err1;
 			break;
 		case P_RINTERNAL:
@@ -541,6 +544,7 @@ bt_broot(t, h, l, r)
 	BLEAF *bl;
 	u_int32_t nbytes;
 	char *dest;
+	pgno_t pg_tmp;
 
 	/*
 	 * If the root page was a leaf page, change it into an internal page.
@@ -568,8 +572,10 @@ bt_broot(t, h, l, r)
 		 * If the key is on an overflow page, mark the overflow chain
 		 * so it isn't deleted when the leaf copy of the key is deleted.
 		 */
+		/* Avoid alignment violation */
+		memcpy(&pg_tmp, bl->bytes, sizeof(pgno_t));
 		if (bl->flags & P_BIGKEY &&
-		    bt_preserve(t, *(pgno_t *)bl->bytes) == RET_ERROR)
+		    bt_preserve(t, pg_tmp) == RET_ERROR)
 			return (RET_ERROR);
 		break;
 	case P_BINTERNAL:
