@@ -87,14 +87,14 @@ __bt_split(t, sp, key, data, flags, ilen, argskip)
 	size_t ilen;
 	u_int32_t argskip;
 {
-	BINTERNAL *bi;
-	BLEAF *bl, *tbl;
+	BINTERNAL *bi = NULL;
+	BLEAF *bl = NULL, *tbl;
 	DBT a, b;
 	EPGNO *parent;
 	PAGE *h, *l, *r, *lchild, *rchild;
 	indx_t nxtindex;
 	u_int16_t skip;
-	u_int32_t n, nbytes, nksize;
+	u_int32_t n, nbytes, nksize = 0;
 	int parentsplit;
 	char *dest;
 
@@ -621,7 +621,7 @@ bt_psplit(t, h, l, r, pskip, ilen)
 	CURSOR *c;
 	RLEAF *rl;
 	PAGE *rval;
-	void *src;
+	void *src = NULL;
 	indx_t full, half, nxt, off, skip, top, used;
 	u_int32_t nbytes;
 	int bigkeycnt, isbigkey;
