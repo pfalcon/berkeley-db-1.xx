@@ -89,8 +89,8 @@ __ovfl_get(t, p, ssz, buf, bufsz)
 	size_t nb, plen;
 	u_int32_t sz;
 
-	memmove(&pg, p, sizeof(pgno_t));
-	memmove(&sz, (char *)p + sizeof(pgno_t), sizeof(u_int32_t));
+	memcpy(&pg, p, sizeof(pgno_t));
+	memcpy(&sz, (char *)p + sizeof(pgno_t), sizeof(u_int32_t));
 	*ssz = sz;
 
 #ifdef DEBUG
