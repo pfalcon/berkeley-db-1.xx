@@ -112,7 +112,7 @@ mpool_new(mp, pgnoaddr)
 	BKT *bp;
 
 	if (mp->npages == MAX_PAGE_NUMBER) {
-		(void)fprintf(stderr, "mpool_new: page allocation overflow.\n");
+		mpool_error("mpool_new: page allocation overflow.\n");
 		abort();
 	}
 #ifdef STATISTICS
@@ -163,7 +163,7 @@ mpool_get(mp, pgno, flags)
 	if ((bp = mpool_look(mp, pgno)) != NULL) {
 #ifdef DEBUG
 		if (bp->flags & MPOOL_PINNED) {
-			(void)fprintf(stderr,
+			mpool_error(
 			    "mpool_get: page %d already pinned\n", bp->pgno);
 			abort();
 		}
@@ -237,7 +237,7 @@ mpool_put(mp, page, flags)
 	bp = (BKT *)((char *)page - sizeof(BKT));
 #ifdef DEBUG
 	if (!(bp->flags & MPOOL_PINNED)) {
-		(void)fprintf(stderr,
+		mpool_error(
 		    "mpool_put: page %d not pinned\n", bp->pgno);
 		abort();
 	}
