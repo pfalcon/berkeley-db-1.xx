@@ -36,14 +36,12 @@ static char sccsid[] = "@(#)mpool.c	8.5 (Berkeley) 7/26/94";
 #endif /* LIBC_SCCS and not lint */
 
 #include <sys/param.h>
-#include <sys/queue.h>
-#include <sys/stat.h>
+#include <bsd-queue.h>
 
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
 
 #include <db.h>
 
@@ -59,27 +57,14 @@ static int  mpool_write __P((MPOOL *, BKT *));
  *	Initialize a memory pool.
  */
 MPOOL *
-mpool_open(key, fd, pagesize, maxcache)
+mpool_open(key, fd, fvtable, pagesize, maxcache)
 	void *key;
-	int fd;
+	virt_fd_t fd;
+	const FILEVTABLE * fvtable;
 	pgno_t pagesize, maxcache;
 {
-	struct stat sb;
 	MPOOL *mp;
 	int entry;
-
-	/*
-	 * Get information about the file.
-	 *
-	 * XXX
-	 * We don't currently handle pipes, although we should.
-	 */
-	if (fstat(fd, &sb))
-		return (NULL);
-	if (!S_ISREG(sb.st_mode)) {
-		errno = ESPIPE;
-		return (NULL);
-	}
 
 	/* Allocate and initialize the MPOOL cookie. */
 	if ((mp = (MPOOL *)calloc(1, sizeof(MPOOL))) == NULL)
@@ -88,7 +73,11 @@ mpool_open(key, fd, pagesize, maxcache)
 	for (entry = 0; entry < HASHSIZE; ++entry)
 		CIRCLEQ_INIT(&mp->hqh[entry]);
 	mp->maxcache = maxcache;
-	mp->npages = sb.st_size / pagesize;
+	mp->fvtable = fvtable;
+	off_t file_size = mp->fvtable->lseek(fd, 0, SEEK_END);
+	if (file_size == (off_t)-1)
+		return (NULL);
+	mp->npages = file_size / pagesize;
 	mp->pagesize = pagesize;
 	mp->fd = fd;
 	return (mp);
@@ -203,9 +192,9 @@ mpool_get(mp, pgno, flags)
 	++mp->pageread;
 #endif
 	off = mp->pagesize * pgno;
-	if (lseek(mp->fd, off, SEEK_SET) != off)
+	if (mp->fvtable->lseek(mp->fd, off, SEEK_SET) != off)
 		return (NULL);
-	if ((nr = read(mp->fd, bp->page, mp->pagesize)) != mp->pagesize) {
+	if ((nr = mp->fvtable->read(mp->fd, bp->page, mp->pagesize)) != mp->pagesize) {
 		if (nr >= 0)
 			errno = EFTYPE;
 		return (NULL);
@@ -297,7 +286,7 @@ mpool_sync(mp)
 			return (RET_ERROR);
 
 	/* Sync the file descriptor. */
-	return (fsync(mp->fd) ? RET_ERROR : RET_SUCCESS);
+	return (mp->fvtable->fsync(mp->fd) ? RET_ERROR : RET_SUCCESS);
 }
 
 /*
@@ -378,9 +367,9 @@ mpool_write(mp, bp)
 		(mp->pgout)(mp->pgcookie, bp->pgno, bp->page);
 
 	off = mp->pagesize * bp->pgno;
-	if (lseek(mp->fd, off, SEEK_SET) != off)
+	if (mp->fvtable->lseek(mp->fd, off, SEEK_SET) != off)
 		return (RET_ERROR);
-	if (write(mp->fd, bp->page, mp->pagesize) != mp->pagesize)
+	if (mp->fvtable->write(mp->fd, bp->page, mp->pagesize) != mp->pagesize)
 		return (RET_ERROR);
 
 	bp->flags &= ~MPOOL_DIRTY;

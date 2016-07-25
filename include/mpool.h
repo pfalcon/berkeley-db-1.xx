@@ -33,7 +33,8 @@
  *	@(#)mpool.h	8.2 (Berkeley) 7/14/94
  */
 
-#include <sys/queue.h>
+#include <bsd-queue.h>
+#include <filevtable.h>
 
 /*
  * The memory pool scheme is a simple one.  Each in-memory page is referenced
@@ -65,8 +66,9 @@ typedef struct MPOOL {
 	pgno_t	maxcache;		/* max number of cached pages */
 	pgno_t	npages;			/* number of pages in the file */
 	u_long	pagesize;		/* file page size */
-	int	fd;			/* file descriptor */
+	virt_fd_t fd;			/* virtual file descriptor */
 					/* page in conversion routine */
+	const FILEVTABLE *fvtable;
 	void    (*pgin) __P((void *, pgno_t, void *));
 					/* page out conversion routine */
 	void    (*pgout) __P((void *, pgno_t, void *));
@@ -85,7 +87,7 @@ typedef struct MPOOL {
 } MPOOL;
 
 __BEGIN_DECLS
-MPOOL	*mpool_open __P((void *, int, pgno_t, pgno_t));
+MPOOL	*mpool_open __P((void *, virt_fd_t, const FILEVTABLE *, pgno_t, pgno_t));
 void	 mpool_filter __P((MPOOL *, void (*)(void *, pgno_t, void *),
 	    void (*)(void *, pgno_t, void *), void *));
 void	*mpool_new __P((MPOOL *, pgno_t *));
