@@ -324,7 +324,7 @@ typedef struct _btree {
 	DBT	  bt_rkey;		/* returned key */
 	DBT	  bt_rdata;		/* returned data */
 
-	int	  bt_fd;		/* tree file descriptor */
+	virt_fd_t bt_fd;		/* tree virtual file descriptor */
 
 	pgno_t	  bt_free;		/* next free page */
 	u_int32_t bt_psize;		/* page size */

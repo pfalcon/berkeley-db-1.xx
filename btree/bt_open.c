@@ -47,16 +47,13 @@ static char sccsid[] = "@(#)bt_open.c	8.10 (Berkeley) 8/17/94";
  */
 
 #include <sys/param.h>
-#include <sys/stat.h>
 
 #include <errno.h>
-#include <fcntl.h>
 #include <limits.h>
-#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
+#include <stdint.h>
 
 #include <db.h>
 #include "btree.h"
@@ -68,7 +65,39 @@ static char sccsid[] = "@(#)bt_open.c	8.10 (Berkeley) 8/17/94";
 
 static int byteorder __P((void));
 static int nroot __P((BTREE *));
-static int tmp __P((void));
+
+#ifdef BTREE_POSIX
+/* Default vmethods and vtable to work with POSIX fd's. */
+static ssize_t bt_read(void *fd, void *buf, size_t size)
+{
+//printf("read: %p(%lx)\n", buf, size);
+    return read((int)(uintptr_t)fd, buf, size);
+}
+
+static ssize_t bt_write(void *fd, const void *buf, size_t size)
+{
+//printf("write: %p(%lx)\n", buf, size);
+    return write((int)(uintptr_t)fd, buf, size);
+}
+
+static off_t bt_lseek(void *fd, off_t offset, int whence)
+{
+//printf("lseek: %lx(%d)\n", offset, whence);
+    return lseek((int)(uintptr_t)fd, offset, whence);
+}
+
+static int bt_fsync(void *fd)
+{
+    return fsync((int)(uintptr_t)fd);
+}
+
+static FILEVTABLE bt_fd_fvtable = {
+    bt_read,
+    bt_write,
+    bt_lseek,
+    bt_fsync
+};
+#endif
 
 /*
  * __BT_OPEN -- Open a btree.
@@ -87,12 +116,12 @@ static int tmp __P((void));
  *
  */
 DB *
-__bt_open(fname, flags, mode, openinfo, dflags)
-	const char *fname;
+__bt_open(file, vtable, flags, mode, openinfo, dflags)
+	virt_fd_t file;
+	const FILEVTABLE *vtable;
 	int flags, mode, dflags;
 	const BTREEINFO *openinfo;
 {
-	struct stat sb;
 	BTMETA m;
 	BTREE *t;
 	BTREEINFO b;
@@ -102,6 +131,10 @@ __bt_open(fname, flags, mode, openinfo, dflags)
 	int machine_lorder;
 
 	t = NULL;
+#ifdef BTREE_POSIX
+	if (vtable == NULL)
+		vtable = &bt_fd_fvtable;
+#endif
 
 	/*
 	 * Intention is to make sure all of the user's selections are okay
@@ -162,7 +195,7 @@ __bt_open(fname, flags, mode, openinfo, dflags)
 	if ((t = (BTREE *)malloc(sizeof(BTREE))) == NULL)
 		goto err;
 	memset(t, 0, sizeof(BTREE));
-	t->bt_fd = -1;			/* Don't close unopened fd on error. */
+	t->bt_fd = file;
 	t->bt_lorder = b.lorder;
 	t->bt_order = NOT;
 	t->bt_cmp = b.compare;
@@ -185,41 +218,9 @@ __bt_open(fname, flags, mode, openinfo, dflags)
 	dbp->seq = __bt_seq;
 	dbp->sync = __bt_sync;
 
-	/*
-	 * If no file name was supplied, this is an in-memory btree and we
-	 * open a backing temporary file.  Otherwise, it's a disk-based tree.
-	 */
-	if (fname) {
-		switch (flags & O_ACCMODE) {
-		case O_RDONLY:
-			F_SET(t, B_RDONLY);
-			break;
-		case O_RDWR:
-			break;
-		case O_WRONLY:
-		default:
-			goto einval;
-		}
-		
-		if ((t->bt_fd = open(fname, flags, mode)) < 0)
+	if ((nr = vtable->read(t->bt_fd, &m, sizeof(BTMETA))) < 0)
 			goto err;
-
-	} else {
-		if ((flags & O_ACCMODE) != O_RDWR)
-			goto einval;
-		if ((t->bt_fd = tmp()) == -1)
-			goto err;
-		F_SET(t, B_INMEM);
-	}
-
-	if (fcntl(t->bt_fd, F_SETFD, 1) == -1)
-		goto err;
-
-	if (fstat(t->bt_fd, &sb))
-		goto err;
-	if (sb.st_size) {
-		if ((nr = read(t->bt_fd, &m, sizeof(BTMETA))) < 0)
-			goto err;
+	if (nr != 0) {
 		if (nr != sizeof(BTMETA))
 			goto eftype;
 
@@ -259,7 +260,6 @@ __bt_open(fname, flags, mode, openinfo, dflags)
 		 * Don't overflow the page offset type.
 		 */
 		if (b.psize == 0) {
-			b.psize = sb.st_blksize;
 			if (b.psize < MINPSIZE)
 				b.psize = MINPSIZE;
 			if (b.psize > MAX_PAGE_OFFSET + 1)
@@ -305,7 +305,7 @@ __bt_open(fname, flags, mode, openinfo, dflags)
 
 	/* Initialize the buffer pool. */
 	if ((t->bt_mp =
-	    mpool_open(NULL, t->bt_fd, t->bt_psize, ncache)) == NULL)
+	    mpool_open(NULL, t->bt_fd, vtable, t->bt_psize, ncache)) == NULL)
 		goto err;
 	if (!F_ISSET(t, B_INMEM))
 		mpool_filter(t->bt_mp, __bt_pgin, __bt_pgout, t);
@@ -333,8 +333,6 @@ eftype:	errno = EFTYPE;
 err:	if (t) {
 		if (t->bt_dbp)
 			free(t->bt_dbp);
-		if (t->bt_fd != -1)
-			(void)close(t->bt_fd);
 		free(t);
 	}
 	return (NULL);
@@ -384,26 +382,6 @@ nroot(t)
 }
 
 static int
-tmp()
-{
-	sigset_t set, oset;
-	int fd;
-	char *envtmp;
-	char path[MAXPATHLEN];
-
-	envtmp = getenv("TMPDIR");
-	(void)snprintf(path,
-	    sizeof(path), "%s/bt.XXXXXX", envtmp ? envtmp : "/tmp");
-
-	(void)sigfillset(&set);
-	(void)sigprocmask(SIG_BLOCK, &set, &oset);
-	if ((fd = mkstemp(path)) != -1)
-		(void)unlink(path);
-	(void)sigprocmask(SIG_SETMASK, &oset, NULL);
-	return(fd);
-}
-
-static int
 byteorder()
 {
 	u_int32_t x;
@@ -435,10 +413,5 @@ __bt_fd(dbp)
 		t->bt_pinned = NULL;
 	}
 
-	/* In-memory database can't have a file descriptor. */
-	if (F_ISSET(t, B_INMEM)) {
-		errno = ENOENT;
-		return (-1);
-	}
-	return (t->bt_fd);
+	return -1;
 }

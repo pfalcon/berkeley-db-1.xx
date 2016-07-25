@@ -44,7 +44,6 @@ static char sccsid[] = "@(#)bt_close.c	8.7 (Berkeley) 8/17/94";
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
 
 #include <db.h>
 #include "btree.h"
@@ -65,7 +64,6 @@ __bt_close(dbp)
 	DB *dbp;
 {
 	BTREE *t;
-	int fd;
 
 	t = dbp->internal;
 
@@ -100,10 +98,9 @@ __bt_close(dbp)
 		t->bt_rdata.data = NULL;
 	}
 
-	fd = t->bt_fd;
 	free(t);
 	free(dbp);
-	return (close(fd) ? RET_ERROR : RET_SUCCESS);
+	return RET_SUCCESS;
 }
 
 /*
