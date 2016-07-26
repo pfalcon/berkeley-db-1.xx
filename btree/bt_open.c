@@ -107,8 +107,6 @@ static FILEVTABLE bt_fd_fvtable = {
  *
  * Parameters:
  *	fname:	filename (NULL for in-memory trees)
- *	flags:	open flag bits
- *	mode:	open permission bits
  *	b:	BTREEINFO pointer
  *
  * Returns:
@@ -116,10 +114,10 @@ static FILEVTABLE bt_fd_fvtable = {
  *
  */
 DB *
-__bt_open(file, vtable, flags, mode, openinfo, dflags)
+__bt_open(file, vtable, openinfo, dflags)
 	virt_fd_t file;
 	const FILEVTABLE *vtable;
-	int flags, mode, dflags;
+	int dflags;
 	const BTREEINFO *openinfo;
 {
 	BTMETA m;

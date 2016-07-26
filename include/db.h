@@ -228,7 +228,7 @@ __BEGIN_DECLS
 DB *dbopen __P((const char *, int, int, DBTYPE, const void *));
 
 #ifdef __DBINTERFACE_PRIVATE
-DB	*__bt_open __P((virt_fd_t, const FILEVTABLE *, int, int, const BTREEINFO *, int));
+DB	*__bt_open __P((virt_fd_t, const FILEVTABLE *, const BTREEINFO *, int));
 DB	*__hash_open __P((const char *, int, int, const HASHINFO *, int));
 DB	*__rec_open __P((const char *, int, int, const RECNOINFO *, int));
 void	 __dbpanic __P((DB *dbp));
