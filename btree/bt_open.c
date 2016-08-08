@@ -258,10 +258,7 @@ __bt_open(file, vtable, openinfo, dflags)
 		 * Don't overflow the page offset type.
 		 */
 		if (b.psize == 0) {
-			if (b.psize < MINPSIZE)
-				b.psize = MINPSIZE;
-			if (b.psize > MAX_PAGE_OFFSET + 1)
-				b.psize = MAX_PAGE_OFFSET + 1;
+			b.psize = DEFPSIZE;
 		}
 
 		/* Set flag if duplicates permitted. */
