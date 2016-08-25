@@ -129,7 +129,9 @@ static int __sigtemp;		/* For the use of sigprocmask */
 #define	strchr(a, b)		index(a, b)
 #define	strrchr(a, b)		rindex(a, b)
 #define	memcmp(a, b, n)		bcmp(a, b, n)
+#ifndef memmove
 #define	memmove(a, b, n)	bcopy(b, a, n)
+#endif
 #endif
 
 /*
