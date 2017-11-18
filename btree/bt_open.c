@@ -124,7 +124,7 @@ __bt_open(file, vtable, openinfo, dflags)
 	BTREE *t;
 	BTREEINFO b;
 	DB *dbp;
-	pgno_t ncache;
+	pgno_t ncache = MINCACHE;
 	ssize_t nr;
 	int machine_lorder;
 
@@ -272,6 +272,7 @@ __bt_open(file, vtable, openinfo, dflags)
 
 	t->bt_psize = b.psize;
 
+#if 0
 	/* Set the cache size; must be a multiple of the page size. */
 	if (b.cachesize && b.cachesize & (b.psize - 1))
 		b.cachesize += (~b.cachesize & (b.psize - 1)) + 1;
@@ -280,6 +281,9 @@ __bt_open(file, vtable, openinfo, dflags)
 
 	/* Calculate number of pages to cache. */
 	ncache = (b.cachesize + t->bt_psize - 1) / t->bt_psize;
+#endif
+	if (b.cachesize)
+		ncache = b.cachesize;
 
 	/*
 	 * The btree data structure requires that at least two keys can fit on
