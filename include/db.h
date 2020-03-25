@@ -37,7 +37,15 @@
 #define	_DB_H_
 
 #include <sys/types.h>
+#if 0
 #include <sys/cdefs.h>
+#else
+#ifndef __P
+#define __P(args) args
+#define __BEGIN_DECLS
+#define __END_DECLS
+#endif
+#endif
 
 #include <limits.h>
 
